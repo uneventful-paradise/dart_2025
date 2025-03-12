@@ -18,3 +18,4 @@ List<int>solve(List<String>arguments){
 void main(List<String>arguments){
     print(solve(arguments));
 }
+//dart lab2/ex1.dart 9 9 9

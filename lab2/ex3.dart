@@ -15,4 +15,5 @@ List<Set<int>> solve(List<int> nbs) {
 void main() {
   List<int> numbers = [1, 2, 3, 1, 1, 3, 2, 2];
   print(solve(numbers)); 
+  
 }
