@@ -1,0 +1,8 @@
+{
+    "lab_name" : "lab4",
+    "prof_name" :"GDT",
+    "nested" : {
+        "field1" : 1,
+        "field2" : 3
+    }
+}
