@@ -1,5 +1,3 @@
-//functie care primeste ca parametru un string si o lista de expresii regulate si returneaza o lista de stringuri care fac match pe
-//macar una din epr
 
 Set<String>get_matches(String base, List<RegExp>regexes){
   Set<String> res = {};
