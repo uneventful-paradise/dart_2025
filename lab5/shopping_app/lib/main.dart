@@ -8,12 +8,13 @@ class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
   
   @override
- Widget build(BuildContext context) {
+  Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Shopping App',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
+      // theme: ThemeData(
+      //   colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+      // ),
+      theme: ThemeData.dark(),
       home: const HomePage(title: 'Shopping List Home Page'),
     );
   }
@@ -40,8 +41,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _counter = 0;
-  final List<String>_shoppingCartItems = [];
+  final List<String> _shoppingCartItems = [];
   final TextEditingController _textController = TextEditingController();
+  int? _deleteIndex; //track the index of the item selected to be deleted. 
+  //this could also be a list to delete multiple elements at once
 
   @override
   void dispose() {
@@ -49,17 +52,12 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
   
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _shoppingCartItems.add("item $_counter");
-      _counter++;
-    });
-  }
+  // void _incrementCounter() {
+  //   setState(() {
+  //     _shoppingCartItems.add("item $_counter");
+  //     _counter++;
+  //   });
+  // }
 
   void _addItem(String item) {
     if (item.isNotEmpty) {
@@ -70,57 +68,86 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void _deleteSelectedItem() {
+    if (_deleteIndex != null) {
+      setState(() {
+        _shoppingCartItems.removeAt(_deleteIndex!);
+        _deleteIndex = null; 
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Text(widget.title),
       ),
       body: Column(
         children: [
-          Expanded( // Wrap the GridView in Expanded to provide a bounded height
+          // Display items with selection functionality
+          Expanded(
             child: GridView.count(
-              primary: false,
               padding: const EdgeInsets.all(20),
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
               crossAxisCount: 4,
               children: List.generate(_shoppingCartItems.length, (index) {
-                return Container(
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Colors.primaries[index % Colors.primaries.length].shade100,
-                    border: Border.all(color: Colors.black12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _shoppingCartItems[index],
-                    style: const TextStyle(fontSize: 16),
+                final bool isSelected = _deleteIndex == index;
+                //https://api.flutter.dev/flutter/widgets/GestureDetector-class.html
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      if(_deleteIndex == index){
+                        _deleteIndex = null;
+                      }else{
+                        _deleteIndex = index;
+                      }
+                    });
+                  },
+                  child: Container(
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? Colors.red  //color a selected item in red otherwise rainbow :)
+                          : Colors.primaries[index % Colors.primaries.length].shade200,
+                      border: Border.all(color: Colors.black12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _shoppingCartItems[index],
+                      style: const TextStyle(fontSize: 16, color: Colors.white),
+                    ),
                   ),
                 );
               }),
             ),
           ),
+          // Input field for new items
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: TextField(
               controller: _textController,
               decoration: const InputDecoration(
-                labelText: 'Enter item',
+                labelText: 'Add item. Press enter to add to list',
                 border: OutlineInputBorder(),
               ),
-              // Optionally, you can add onSubmitted to add item when user presses enter:
               onSubmitted: _addItem,
             ),
           ),
+          Padding(padding: const EdgeInsets.all(8.0),
+          child: ElevatedButton(
+              onPressed: _deleteIndex != null ? _deleteSelectedItem : null,
+              child: const Text('Delete Selected Item'),
+            ),
+          ),
+          // Dedicated delete button that only activates if an item is selected
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _addItem(_textController.text),
-        tooltip: 'Add Item',
-        child: const Icon(Icons.add),
-      ),
+      // floatingActionButton: FloatingActionButton(
+      //   onPressed: () => _addItem(_textController.text),
+      //   child: const Icon(Icons.add),
+      // ),
     );
   }
 }
