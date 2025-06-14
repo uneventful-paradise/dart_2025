@@ -1,9 +1,18 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => FavoritesModel()),
+        ChangeNotifierProvider(create: (_) => CategoriesModel()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 enum ShapeType { circle, square, triangle }
@@ -15,9 +24,84 @@ class Category {
   Category({required this.color, required this.shape});
 }
 
+// Model for managing the dynamic categories mapping.
+class CategoriesModel extends ChangeNotifier {
+  Map<String, Category> categories = {
+    'Beverages': Category(color: Colors.green, shape: ShapeType.circle),
+    'Vegetables': Category(color: Colors.orange, shape: ShapeType.square),
+    'Sweets': Category(color: Colors.blue, shape: ShapeType.triangle),
+  };
+
+  Timer? _timer;
+
+  CategoriesModel() {
+    _timer = Timer.periodic(const Duration(seconds: 5), (Timer t) {
+      updateCategoryColors();
+    });
+  }
+
+  void updateCategoryColors() {
+    final random = Random();
+    categories.updateAll((key, category) {
+      return Category(
+        color: Color.fromARGB(
+          255,
+          random.nextInt(256),
+          random.nextInt(256),
+          random.nextInt(256),
+        ),
+        shape: category.shape,
+      );
+    });
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+}
+
+// A unified data model for a shopping item including its category.
+class ShoppingItem {
+  final String name;
+  String? category; // Should hold one of the keys from the categories map
+
+  ShoppingItem({required this.name, this.category});
+}
+
+// FavoritesModel now stores ShoppingItem objects.
+class FavoritesModel extends ChangeNotifier {
+  final List<ShoppingItem> _favorites = [];
+
+  List<ShoppingItem> get favorites => _favorites;
+
+  bool isFavorite(ShoppingItem item) {
+    return _favorites.contains(item);
+  }
+
+  void toggleFavorite(ShoppingItem item) {
+    if (_favorites.contains(item)) {
+      _favorites.remove(item);
+    } else {
+      _favorites.add(item);
+    }
+    notifyListeners();
+  }
+
+  // Called when an item is deleted from the shopping list.
+  void removeFavorite(ShoppingItem item) {
+    if (_favorites.contains(item)) {
+      _favorites.remove(item);
+      notifyListeners();
+    }
+  }
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
-  
+    
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -33,13 +117,13 @@ class CategoryCustomPainter extends CustomPainter {
   final ShapeType shape;
 
   CategoryCustomPainter({required this.color, required this.shape});
-  
+    
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.fill;
-    
+      
     switch (shape) {
       case ShapeType.circle:
         canvas.drawCircle(Offset(size.width / 2, size.height / 2), size.width / 2, paint);
@@ -57,7 +141,7 @@ class CategoryCustomPainter extends CustomPainter {
         break;
     }
   }
-  
+    
   @override
   bool shouldRepaint(covariant CategoryCustomPainter oldDelegate) {
     return oldDelegate.color != color || oldDelegate.shape != shape;
@@ -68,83 +152,56 @@ class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.title});
 
   final String title;
-
+    
   @override
   State<HomePage> createState() => _HomePageState();
 }
-
+    
 class _HomePageState extends State<HomePage> {
-  final List<String> _shoppingCartItems = [];
-  final List<String?> _itemCategories = [];
-  
+  // Use a list of ShoppingItem objects.
+  final List<ShoppingItem> _shoppingItems = [];
   final TextEditingController _textController = TextEditingController();
   int? _deleteIndex;
-  Timer? _timer;
-  
-  // Map of categories to their associated color and shape.
-  final Map<String, Category> _categories = {
-    'Fruits': Category(color: Colors.green, shape: ShapeType.circle),
-    'Vegetables': Category(color: Colors.orange, shape: ShapeType.square),
-    'Dairy': Category(color: Colors.blue, shape: ShapeType.triangle),
-  };
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 5), (Timer t) {
-      _updateCategoryColors();
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _textController.dispose();
-    super.dispose();
-  }
-  
-  Color _getRandomColor() {
-    final random = Random();
-    return Color.fromARGB(
-      255,
-      random.nextInt(256),
-      random.nextInt(256),
-      random.nextInt(256),
-    );
-  }
-  
-  void _updateCategoryColors() {
-    setState(() {
-      _categories.updateAll((key, category) {
-        return Category(color: _getRandomColor(), shape: category.shape);
-      });
-    });
-  }
-
-  void _addItem(String item) {
-    if (item.isNotEmpty) {
+    
+  void _addItem(String itemName) {
+    if (itemName.isNotEmpty) {
       setState(() {
-        _shoppingCartItems.add(item);
-        _itemCategories.add(null);
+        _shoppingItems.add(ShoppingItem(name: itemName));
       });
       _textController.clear();
     }
   }
-
+    
   void _deleteSelectedItem() {
     if (_deleteIndex != null) {
       setState(() {
-        _shoppingCartItems.removeAt(_deleteIndex!);
-        _itemCategories.removeAt(_deleteIndex!);
+        ShoppingItem removedItem = _shoppingItems[_deleteIndex!];
+        _shoppingItems.removeAt(_deleteIndex!);
+        // Also remove it from favorites if it exists.
+        Provider.of<FavoritesModel>(context, listen: false).removeFavorite(removedItem);
         _deleteIndex = null;
       });
     }
   }
-
+    
   @override
   Widget build(BuildContext context) {
+    // Get the CategoriesModel (with up-to-date colors and shapes).
+    final categoriesModel = Provider.of<CategoriesModel>(context);
+    final categories = categoriesModel.categories;
+      
     return Scaffold(
+      // Favorites icon moved to the top left.
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.favorite),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const FavoritesListPage()),
+            );
+          },
+        ),
         title: Text(widget.title),
       ),
       body: Column(
@@ -155,16 +212,17 @@ class _HomePageState extends State<HomePage> {
               crossAxisSpacing: 10,
               mainAxisSpacing: 10,
               crossAxisCount: 4,
-              children: List.generate(_shoppingCartItems.length, (index) {
+              children: List.generate(_shoppingItems.length, (index) {
                 final bool isSelected = _deleteIndex == index;
-                
+                final ShoppingItem item = _shoppingItems[index];
+                  
                 Color containerColor;
                 if (isSelected) {
                   containerColor = Colors.red;
                 } else {
                   containerColor = Colors.primaries[index % Colors.primaries.length].shade200;
                 }
-                
+                  
                 return GestureDetector(
                   onTap: () {
                     setState(() {
@@ -182,37 +240,54 @@ class _HomePageState extends State<HomePage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        // Display item text and the category icon if assigned.
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              _shoppingCartItems[index],
+                              item.name,
                               style: const TextStyle(fontSize: 16, color: Colors.white),
                             ),
-                            if (_itemCategories[index] != null)
+                            if (item.category != null && categories.containsKey(item.category!))
                               Padding(
                                 padding: const EdgeInsets.only(left: 8.0),
                                 child: RepaintBoundary(
                                   child: CustomPaint(
                                     size: const Size(24, 24),
                                     painter: CategoryCustomPainter(
-                                      color: _categories[_itemCategories[index]]!.color,
-                                      shape: _categories[_itemCategories[index]]!.shape,
+                                      color: categories[item.category!]!.color,
+                                      shape: categories[item.category!]!.shape,
                                     ),
                                   ),
                                 ),
                               ),
                           ],
                         ),
+                        // Star button for toggling favorites.
+                        Consumer<FavoritesModel>(
+                          builder: (context, favoritesModel, child) {
+                            bool isFav = favoritesModel.isFavorite(item);
+                            return IconButton(
+                              icon: Icon(
+                                isFav ? Icons.star : Icons.star_border,
+                                color: Colors.amber,
+                              ),
+                              onPressed: () {
+                                favoritesModel.toggleFavorite(item);
+                              },
+                            );
+                          },
+                        ),
                         const SizedBox(height: 8),
+                        // Popup menu for choosing a category.
                         PopupMenuButton<String>(
                           onSelected: (String value) {
                             setState(() {
-                              _itemCategories[index] = value;
+                              item.category = value;
                             });
                           },
                           itemBuilder: (BuildContext context) {
-                            return _categories.keys.map((String category) {
+                            return categories.keys.map((String category) {
                               return PopupMenuItem<String>(
                                 value: category,
                                 child: Text(category),
@@ -240,7 +315,7 @@ class _HomePageState extends State<HomePage> {
               onSubmitted: _addItem,
             ),
           ),
-          // Button to delete selected item.
+          // Button to delete the selected item.
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: ElevatedButton(
@@ -249,6 +324,77 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+    
+// FavoritesListPage now displays favorites in a grid with both the item name and its category icon.
+class FavoritesListPage extends StatelessWidget {
+  const FavoritesListPage({Key? key}) : super(key: key);
+    
+  @override
+  Widget build(BuildContext context) {
+    // Get the current categories from the provider.
+    final categories = Provider.of<CategoriesModel>(context).categories;
+      
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Favorites'),
+      ),
+      body: Consumer<FavoritesModel>(
+        builder: (context, favoritesModel, child) {
+          if (favoritesModel.favorites.isEmpty) {
+            return const Center(child: Text('No favorites yet'));
+          } else {
+            return GridView.count(
+              padding: const EdgeInsets.all(20),
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              crossAxisCount: 4,
+              children: List.generate(favoritesModel.favorites.length, (index) {
+                final ShoppingItem item = favoritesModel.favorites[index];
+                return Container(
+                  padding: const EdgeInsets.all(8.0),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.primaries[index % Colors.primaries.length].shade200,
+                    border: Border.all(color: Colors.black12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Display the item text and its category icon if available.
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            item.name,
+                            style: const TextStyle(fontSize: 16, color: Colors.white),
+                          ),
+                          if (item.category != null && categories.containsKey(item.category!))
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8.0),
+                              child: RepaintBoundary(
+                                child: CustomPaint(
+                                  size: const Size(24, 24),
+                                  painter: CategoryCustomPainter(
+                                    color: categories[item.category!]!.color,
+                                    shape: categories[item.category!]!.shape,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            );
+          }
+        },
       ),
     );
   }
